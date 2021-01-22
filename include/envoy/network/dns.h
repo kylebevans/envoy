@@ -1,6 +1,7 @@
 #pragma once
 
 #include <chrono>
+#include <cstdint>
 #include <functional>
 #include <list>
 #include <memory>
@@ -34,6 +35,22 @@ struct DnsResponse {
 
   const Address::InstanceConstSharedPtr address_;
   const std::chrono::seconds ttl_;
+};
+
+/**
+ * SRV DNS response.
+ */
+struct SrvDnsResponse {
+  SrvDnsResponse(const std::string target&, const uint32_t port, const std::chrono::seconds ttl, const uint32_t weight)
+      : address_(address), port_(port), ttl_(ttl), weight_(weight) {}
+
+  const std::string target_;
+  const uint32_t port_;
+  const std::chrono::seconds ttl_;
+  const uint32_t weight_;
+  // If there is interest in the future, SRV record priority will trigger cluster locality awareness and the priority
+  // will map to locality priority.  Each SRV target would map to a different locality.
+  // const uint32_t priority_
 };
 
 enum class DnsLookupFamily { V4Only, V6Only, Auto };
