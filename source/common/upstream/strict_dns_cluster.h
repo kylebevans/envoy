@@ -10,12 +10,12 @@ namespace Envoy {
 namespace Upstream {
 
 /**
- * Implementation of Upstream::Cluster that does periodic DNS resolution and updates the host
- * member set if the DNS members change.
+ * Base Implementation of Upstream::Cluster that does periodic DNS resolution and updates the host
+ * member set if the DNS members change. Used by STRICT_DNS and SRV_DNS clusters.
  */
-class StrictDnsClusterImpl : public BaseDynamicClusterImpl {
+class BaseStrictDnsClusterImpl : public BaseDynamicClusterImpl {
 public:
-  StrictDnsClusterImpl(const envoy::config::cluster::v3::Cluster& cluster, Runtime::Loader& runtime,
+  BaseStrictDnsClusterImpl(const envoy::config::cluster::v3::Cluster& cluster, Runtime::Loader& runtime,
                        Network::DnsResolverSharedPtr dns_resolver,
                        Server::Configuration::TransportSocketFactoryContextImpl& factory_context,
                        Stats::ScopePtr&& stats_scope, bool added_via_api);
@@ -23,9 +23,9 @@ public:
   // Upstream::Cluster
   InitializePhase initializePhase() const override { return InitializePhase::Primary; }
 
-private:
+protected:
   struct ResolveTarget {
-    ResolveTarget(StrictDnsClusterImpl& parent, Event::Dispatcher& dispatcher,
+    ResolveTarget(BaseStrictDnsClusterImpl& parent, Event::Dispatcher& dispatcher,
                   const std::string& url,
                   const envoy::config::endpoint::v3::LocalityLbEndpoints& locality_lb_endpoint,
                   const envoy::config::endpoint::v3::LbEndpoint& lb_endpoint);
@@ -59,6 +59,17 @@ private:
   const bool respect_dns_ttl_;
   Network::DnsLookupFamily dns_lookup_family_;
   uint32_t overprovisioning_factor_;
+};
+
+/**
+ * STRICT_DNS derivation of BaseStrictDnsClusterImpl
+ */
+class StrictDnsClusterImpl : public BaseStrictDnsClusterImpl{
+public:
+  StrictDnsClusterImpl(const envoy::config::cluster::v3::Cluster& cluster, Runtime::Loader& runtime,
+                       Network::DnsResolverSharedPtr dns_resolver,
+                       Server::Configuration::TransportSocketFactoryContextImpl& factory_context,
+                       Stats::ScopePtr&& stats_scope, bool added_via_api);
 };
 
 /**

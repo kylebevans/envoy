@@ -1,0 +1,20 @@
+syntax = "proto3";
+
+package envoy.config.common.srv.v3;
+
+import "udpa/annotations/status.proto";
+import "validate/validate.proto";
+
+option java_package = "io.envoyproxy.envoy.config.common.srv.v3";
+option java_outer_classname = "SrvProto";
+option java_multiple_files = true;
+option (udpa.annotations.file_status).package_version_status = ACTIVE;
+
+// [#protodoc-title: DNS SRV Record]
+// A message to represent a DNS SRV record. Intended to be used in
+// other packages as a repeated field.
+
+message SrvName {
+  // SRV record to lookup such as _unique_name._tcp.example.com.
+  string srv_name = 1;
+}

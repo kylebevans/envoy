@@ -8,7 +8,7 @@
 namespace Envoy {
 namespace Upstream {
 
-StrictDnsClusterImpl::StrictDnsClusterImpl(
+BaseStrictDnsClusterImpl::BaseStrictDnsClusterImpl(
     const envoy::config::cluster::v3::Cluster& cluster, Runtime::Loader& runtime,
     Network::DnsResolverSharedPtr dns_resolver,
     Server::Configuration::TransportSocketFactoryContextImpl& factory_context,
@@ -22,36 +22,10 @@ StrictDnsClusterImpl::StrictDnsClusterImpl(
   failure_backoff_strategy_ =
       Config::Utility::prepareDnsRefreshStrategy<envoy::config::cluster::v3::Cluster>(
           cluster, dns_refresh_rate_ms_.count(), factory_context.api().randomGenerator());
-
-  std::list<ResolveTargetPtr> resolve_targets;
-  const envoy::config::endpoint::v3::ClusterLoadAssignment load_assignment(
-      cluster.has_load_assignment()
-          ? cluster.load_assignment()
-          : Config::Utility::translateClusterHosts(cluster.hidden_envoy_deprecated_hosts()));
-  const auto& locality_lb_endpoints = load_assignment.endpoints();
-  for (const auto& locality_lb_endpoint : locality_lb_endpoints) {
-    validateEndpointsForZoneAwareRouting(locality_lb_endpoint);
-
-    for (const auto& lb_endpoint : locality_lb_endpoint.lb_endpoints()) {
-      const auto& socket_address = lb_endpoint.endpoint().address().socket_address();
-      if (!socket_address.resolver_name().empty()) {
-        throw EnvoyException("STRICT_DNS clusters must NOT have a custom resolver name set");
-      }
-
-      const std::string& url =
-          fmt::format("tcp://{}:{}", socket_address.address(), socket_address.port_value());
-      resolve_targets.emplace_back(new ResolveTarget(*this, factory_context.dispatcher(), url,
-                                                     locality_lb_endpoint, lb_endpoint));
-    }
-  }
-  resolve_targets_ = std::move(resolve_targets);
   dns_lookup_family_ = getDnsLookupFamilyFromCluster(cluster);
-
-  overprovisioning_factor_ = PROTOBUF_GET_WRAPPED_OR_DEFAULT(
-      load_assignment.policy(), overprovisioning_factor, kDefaultOverProvisioningFactor);
 }
 
-void StrictDnsClusterImpl::startPreInit() {
+void BaseStrictDnsClusterImpl::startPreInit() {
   for (const ResolveTargetPtr& target : resolve_targets_) {
     target->startResolve();
   }
@@ -62,7 +36,7 @@ void StrictDnsClusterImpl::startPreInit() {
   }
 }
 
-void StrictDnsClusterImpl::updateAllHosts(const HostVector& hosts_added,
+void BaseStrictDnsClusterImpl::updateAllHosts(const HostVector& hosts_added,
                                           const HostVector& hosts_removed,
                                           uint32_t current_priority) {
   PriorityStateManager priority_state_manager(*this, local_info_, nullptr);
@@ -87,7 +61,7 @@ void StrictDnsClusterImpl::updateAllHosts(const HostVector& hosts_added,
       hosts_added, hosts_removed, absl::nullopt, overprovisioning_factor_);
 }
 
-StrictDnsClusterImpl::ResolveTarget::ResolveTarget(
+BaseStrictDnsClusterImpl::ResolveTarget::ResolveTarget(
     StrictDnsClusterImpl& parent, Event::Dispatcher& dispatcher, const std::string& url,
     const envoy::config::endpoint::v3::LocalityLbEndpoints& locality_lb_endpoint,
     const envoy::config::endpoint::v3::LbEndpoint& lb_endpoint)
@@ -96,13 +70,13 @@ StrictDnsClusterImpl::ResolveTarget::ResolveTarget(
       resolve_timer_(dispatcher.createTimer([this]() -> void { startResolve(); })),
       locality_lb_endpoint_(locality_lb_endpoint), lb_endpoint_(lb_endpoint) {}
 
-StrictDnsClusterImpl::ResolveTarget::~ResolveTarget() {
+BaseStrictDnsClusterImpl::ResolveTarget::~ResolveTarget() {
   if (active_query_) {
     active_query_->cancel();
   }
 }
 
-void StrictDnsClusterImpl::ResolveTarget::startResolve() {
+void BaseStrictDnsClusterImpl::ResolveTarget::startResolve() {
   ENVOY_LOG(trace, "starting async DNS resolution for {}", dns_address_);
   parent_.info_->stats().update_attempt_.inc();
 
@@ -142,6 +116,11 @@ void StrictDnsClusterImpl::ResolveTarget::startResolve() {
 
           HostVector hosts_added;
           HostVector hosts_removed;
+          // updateDynamicHostList only gets the changes for this ResolveTarget rather than the
+          // whole priority. Also, hosts_, hosts_added, and hosts_removed are all updated per
+          // ResolveTarget. If there are changes, then updateAllHosts will iterate through all of
+          // the ResolveTargets for the cluster, find all of the hosts_ for this priority including
+          // this updated one, and update the cluster with the new set of hosts for this priority.
           if (parent_.updateDynamicHostList(new_hosts, hosts_, hosts_added, hosts_removed,
                                             updated_hosts, all_hosts_, all_new_hosts)) {
             ENVOY_LOG(debug, "DNS hosts have changed for {}", dns_address_);
@@ -182,6 +161,40 @@ void StrictDnsClusterImpl::ResolveTarget::startResolve() {
         parent_.onPreInitComplete();
         resolve_timer_->enableTimer(final_refresh_rate);
       });
+}
+
+StrictDnsClusterImpl::StrictDnsClusterImpl(
+    const envoy::config::cluster::v3::Cluster& cluster, Runtime::Loader& runtime,
+    Network::DnsResolverSharedPtr dns_resolver,
+    Server::Configuration::TransportSocketFactoryContextImpl& factory_context,
+    Stats::ScopePtr&& stats_scope, bool added_via_api)
+    : BaseStrictDnsClusterImpl(cluster, runtime, dns_resolver, factory_context, std::move(stats_scope),
+                             added_via_api) {
+
+  std::list<ResolveTargetPtr> resolve_targets;
+  const envoy::config::endpoint::v3::ClusterLoadAssignment load_assignment(
+      cluster.has_load_assignment()
+          ? cluster.load_assignment()
+          : Config::Utility::translateClusterHosts(cluster.hidden_envoy_deprecated_hosts()));
+  const auto& locality_lb_endpoints = load_assignment.endpoints();
+  for (const auto& locality_lb_endpoint : locality_lb_endpoints) {
+    validateEndpointsForZoneAwareRouting(locality_lb_endpoint);
+
+    for (const auto& lb_endpoint : locality_lb_endpoint.lb_endpoints()) {
+      const auto& socket_address = lb_endpoint.endpoint().address().socket_address();
+      if (!socket_address.resolver_name().empty()) {
+        throw EnvoyException("STRICT_DNS clusters must NOT have a custom resolver name set");
+      }
+
+      const std::string& url =
+          fmt::format("tcp://{}:{}", socket_address.address(), socket_address.port_value());
+      resolve_targets.emplace_back(new ResolveTarget(*this, factory_context.dispatcher(), url,
+                                                     locality_lb_endpoint, lb_endpoint));
+    }
+  }
+  resolve_targets_ = std::move(resolve_targets);
+  overprovisioning_factor_ = PROTOBUF_GET_WRAPPED_OR_DEFAULT(
+      load_assignment.policy(), overprovisioning_factor, kDefaultOverProvisioningFactor);
 }
 
 std::pair<ClusterImplBaseSharedPtr, ThreadAwareLoadBalancerPtr>

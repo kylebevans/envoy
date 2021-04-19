@@ -26,6 +26,8 @@ public:
   virtual void cancel() PURE;
 };
 
+using ActiveDnsQueryPtr = std::unique_ptr<ActiveDnsQuery>;
+
 /**
  * DNS response.
  */
@@ -42,7 +44,7 @@ struct DnsResponse {
  */
 struct SrvDnsResponse {
   SrvDnsResponse(const std::string target&, const uint32_t port, const std::chrono::seconds ttl, const uint32_t weight)
-      : address_(address), port_(port), ttl_(ttl), weight_(weight) {}
+      : target_(target), port_(port), ttl_(ttl), weight_(weight) {}
 
   const std::string target_;
   const uint32_t port_;
@@ -90,8 +92,8 @@ public:
    * @param srv_records supplies the list of resolved SRV records. The list will be empty if the
    *        resolution failed.
    */
-  typedef std::function<void(const std::list<Address::SrvInstanceConstSharedPtr>&& srv_records)>
-      ResolveSrvCb;
+  using ResolveSrvCb = std::function<void(ResolutionStatus status,
+                                          std::list<SrvDnsResponse>&& response)>;
 
   /**
    * Initiate an async DNS resolution for an SRV record.
@@ -101,7 +103,7 @@ public:
    * @return if non-null, a handle that can be used to cancel the resolution.
    *         This is only valid until the invocation of callback or ~DnsResolver().
    */
-  virtual ActiveDnsQuery* resolveSrv(const std::string& dns_name, DnsLookupFamily dns_lookup_family,
+  virtual ActiveDnsQueryPtr resolveSrv(const std::string& dns_name, DnsLookupFamily dns_lookup_family,
                                      ResolveSrvCb callback) PURE;
 };
 

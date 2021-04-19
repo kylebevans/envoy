@@ -433,6 +433,14 @@ public:
   translateClusterHosts(const Protobuf::RepeatedPtrField<envoy::config::core::v3::Address>& hosts);
 
   /**
+   * Translate a DNS SRV record into a load assignment configuration.
+   * @param srv_names list of srv records to resolve.
+   * @return envoy::config::endpoint::v3::ClusterLoadAssignment a load assignment configuration.
+   */
+  static envoy::config::endpoint::v3::ClusterLoadAssignment
+  translateClusterSrv(const Protobuf::RepeatedPtrField<envoy::config::common::srv::v3::SrvName>& srv_names);
+
+  /**
    * Translate opaque config from google.protobuf.Any or google.protobuf.Struct to defined proto
    * message.
    * @param typed_config opaque config packed in google.protobuf.Any

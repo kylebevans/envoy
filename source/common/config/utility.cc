@@ -270,6 +270,51 @@ envoy::config::endpoint::v3::ClusterLoadAssignment Utility::translateClusterHost
   return load_assignment;
 }
 
+envoy::config::endpoint::v3::ClusterLoadAssignment translateClusterSrv(
+    const Protobuf::RepeatedPtrField<envoy::config::common::srv::v3::SrvName>& srv_names, srv_resolve_timer, resolver) {
+  envoy::config::endpoint::v3::ClusterLoadAssignment load_assignment;
+  envoy::config::endpoint::v3::LocalityLbEndpoints* locality_lb_endpoints =
+      load_assignment.add_endpoints();
+  // In the future, locality can be synthesized from srv priority with different weights per
+  // locality, but for now set the default weight to 1.
+  locality_lb_endpoints->mutable_load_balancing_weight()->set_value(1);
+  // MOVE THIS TO SRV CLUSTER
+      size_t finished = 0;
+
+      for (ares_srv_reply* current_reply = srv_reply; current_reply != NULL;
+           current_reply = current_reply->next) {
+        resolver_->resolve(
+          current_reply->host, this->dns_lookup_family_,
+          [this, total, finished, srv_records, current_reply]
+          (const std::list<DnsResponse>&& response) {
+            for (auto instance = response.begin(); instance != response.end(); ++instance) {
+              Address::InstanceConstSharedPtr inst_with_port(
+                Utility::getAddressWithPort(*instance->address_, current_reply->port));
+              //NEED TO CREATE HOSTS HERE NOT SRV RECORDS IN ClUSTER
+              srv_records.emplace_back(new Address::SrvInstanceImpl(
+                inst_with_port, current_reply->priority, current_reply->weight));
+            }
+            if (++finished == srv_records.size()) {
+              this->onAresSrvFinishCallback(std::move(srv_records));
+            }
+          }
+        );
+      }
+      replies_parsed = true;
+
+  if (!replies_parsed) {
+    onAresSrvFinishCallback({});
+  }
+// END MOVE
+// maybe instead of a utility, you need to create a class srvloadassigner that can be added to
+// clusters maybe create a srv_resolve_timer for the cluster that will call the utility again after
+// ttl or should i create a srvresolvetarget that will hold a timer for each srv record?
+// cluster calls translatesrv or instantiates srvloadassigner to get a list of srvresolvetargets,
+// each srvresolvetarget holds a timer that will re-resolve the srv record.  It also holds a
+// std:function that will get called if the hosts returned from srv change.
+}
+
+
 void Utility::translateOpaqueConfig(const ProtobufWkt::Any& typed_config,
                                     const ProtobufWkt::Struct& config,
                                     ProtobufMessage::ValidationVisitor& validation_visitor,

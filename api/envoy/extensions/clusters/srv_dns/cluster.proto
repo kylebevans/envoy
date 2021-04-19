@@ -1,0 +1,40 @@
+syntax = "proto3";
+
+package envoy.extensions.clusters.srv_dns.v3;
+
+import "udpa/annotations/status.proto";
+import "validate/validate.proto";
+import "envoy/config/common/srv/v3/srv.proto";
+
+option java_package = "io.envoyproxy.envoy.config.cluster.srv_dns";
+option java_outer_classname = "ClusterProto";
+option java_multiple_files = true;
+option (udpa.annotations.file_status).package_version_status = ACTIVE;
+
+// [#protodoc-title: SRV_DNS Cluster Configuration]
+// This cluster will use DNS SRV records for configuration of upstream hosts.
+//
+// Example:
+//
+// .. code-block:: yaml
+//
+//      clusters:
+//        - name: unique_name
+//          cluster_type:
+//            name: envoy.clusters.srv_dns
+//            typed_config:
+//              "@type": type.googleapis.com/envoy.extensions.clusters.srv_dns.v3.ClusterConfig
+//              srv_names:
+//                - srv_name: _unique_name._tcp.example.com
+//          respect_dns_ttl: true
+//          dns_resolvers:
+//            - address:
+//                socket_address:
+//                  address: 8.8.8.8
+//                  port_value: 53
+// [#extension: envoy.clusters.srv_dns]
+
+message ClusterConfig {
+  // List of SRV names to lookup to get upstream hosts.
+  repeated SrvName srv_names = 1 [(validate.rules).repeated = {min_items: 1}];
+}

@@ -944,5 +944,41 @@ void reportUpstreamCxDestroy(const Upstream::HostDescriptionConstSharedPtr& host
 void reportUpstreamCxDestroyActiveRequest(const Upstream::HostDescriptionConstSharedPtr& host,
                                           Network::ConnectionEvent event);
 
+class SrvLoadAssignmentManager {
+public:
+  SrvLoadAssignmentManager(
+    const Protobuf::RepeatedPtrField<envoy::config::common::srv::v3::SrvName>& srv_names,
+    const Network:DnsResolver& resolver,
+
+    //function passed here should be a lambda that captures the cluster
+    std::function<voice(const envoy::config::endpoint::v3::ClusterLoadAssignment& load_assignment)>
+      load_update_cb_;
+    );
+
+private:
+  class SrvResolveTarget {
+    SrvResolveTarget();
+    ~SrvResolveTarget();
+    void startResolve();
+
+    Network::ActiveDnsQueryPtr active_query_{};
+    std::string srv_name_;
+    Event::TimerPtr srv_resolve_timer_;
+  }
+
+  envoy::config::endpoint::v3::ClusterLoadAssignment load_assignment_;
+
+  envoy::config::endpoint::v3::ClusterLoadAssignment clusterLoadAssignment();
+
+  // need to create list of SrvResolveTargets
+  // each one needs to call resolveSrv, get a list of SrvDnsResponses back
+  // need to compare those to current list
+  // if changes, call method to update SrvLoadBuilder cluster load assignment
+  // then call user provided function to update hosts
+  // user provided function needs to create ResolveTargets or equivalent
+  // to assign the load to the cluster
+
+  using SrvResolveTargetPtr = std::unique_ptr<SrvResolveTarget>;
+}
 } // namespace Upstream
 } // namespace Envoy
