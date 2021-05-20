@@ -39,6 +39,9 @@ public:
   // Aggregate cluster which may contain different types of clusters. It allows load balance between
   // different type of clusters.
   const std::string Aggregate = "envoy.clusters.aggregate";
+
+  // SRV DNS cluster which uses DNS SRV records to get hosts for the cluster load assignment.
+  const std::string SrvDns = "envoy.clusters.srv_dns";
 };
 
 using ClusterTypes = ConstSingleton<ClusterTypeValues>;

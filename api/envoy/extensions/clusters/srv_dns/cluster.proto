@@ -6,7 +6,7 @@ import "udpa/annotations/status.proto";
 import "validate/validate.proto";
 import "envoy/config/common/srv/v3/srv.proto";
 
-option java_package = "io.envoyproxy.envoy.config.cluster.srv_dns";
+option java_package = "io.envoyproxy.envoy.extensions.cluster.srv_dns";
 option java_outer_classname = "ClusterProto";
 option java_multiple_files = true;
 option (udpa.annotations.file_status).package_version_status = ACTIVE;

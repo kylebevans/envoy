@@ -948,37 +948,63 @@ class SrvLoadAssignmentManager {
 public:
   SrvLoadAssignmentManager(
     const Protobuf::RepeatedPtrField<envoy::config::common::srv::v3::SrvName>& srv_names,
-    const Network:DnsResolver& resolver,
-
-    //function passed here should be a lambda that captures the cluster
-    std::function<voice(const envoy::config::endpoint::v3::ClusterLoadAssignment& load_assignment)>
-      load_update_cb_;
-    );
+    Network::DnsResolverSharedPtr dns_resolver, Event::Dispatcher& dispatcher,
+    std::function<void(
+      const envoy::config::endpoint::v3::LocalityLbEndpoints& add_locality_lb_endpoints,
+      const envoy::config::endpoint::v3::LocalityLbEndpoints& remove_locality_lb_endpoints)>
+      load_update_cb);
+  ~SrvLoadAssignmentManager();
 
 private:
   class SrvResolveTarget {
-    SrvResolveTarget();
+  public:
+    SrvResolveTarget(envoy::config::common::srv::v3::SrvName srv_name,
+      Network::DnsResolverSharedPtr dns_resolver, Event::Dispatcher& dispatcher);
     ~SrvResolveTarget();
-    void startResolve();
+
+    void startSrvResolve();
+
+    // Takes the responses from startResolve and compares them to the current responses.
+    // If there is a change, it will call updateClusterLoadAssignment.
+    bool SrvDnsResponseChanges(std::list<Network::SrvDnsResponse> new_responses);
 
     Network::ActiveDnsQueryPtr active_query_{};
-    std::string srv_name_;
+    const envoy::config::common::srv::v3::SrvName srv_name_;
+    Network::DnsResolverSharedPtr dns_resolver_;
     Event::TimerPtr srv_resolve_timer_;
+    std::list<Network::SrvDnsResponse> srv_dns_responses_;
   }
 
-  envoy::config::endpoint::v3::ClusterLoadAssignment load_assignment_;
+  using SrvResolveTargetPtr = std::unique_ptr<SrvResolveTarget>;
 
+  // Returns a cluster load assignment based on srv records.
   envoy::config::endpoint::v3::ClusterLoadAssignment clusterLoadAssignment();
+
+  // Iterates through the SrvResolveTargets, updates the cluster load assignment, then calls the
+  // load_update_cb_.
+  void updateClusterLoadAssignment();
+
+  // The function passed to load_update_cb_ should be a lambda that captures the cluster with
+  // [this] and uses the new load assignment to create/update the cluster Hosts.
+  std::function<void(
+    const absl::flat_hash_map<uint32_t,
+        std::pair<envoy::config::endpoint::v3::LocalityLbEndpoints,
+          std::vector<envoy::config::endpoint::v3::LbEndpoints>>>& add_locality_lb_endpoints,
+    const absl::flat_hash_map<uint32_t,
+        std::pair<envoy::config::endpoint::v3::LocalityLbEndpoints,
+          std::vector<envoy::config::endpoint::v3::LbEndpoints>>>& remove_locality_lb_endpoints
+  )> load_update_cb_;
+  envoy::config::endpoint::v3::ClusterLoadAssignment load_assignment_;
+  std::vector<SrvResolveTargetPtr> srv_resolve_targets_;
 
   // need to create list of SrvResolveTargets
   // each one needs to call resolveSrv, get a list of SrvDnsResponses back
   // need to compare those to current list
   // if changes, call method to update SrvLoadBuilder cluster load assignment
   // then call user provided function to update hosts
-  // user provided function needs to create ResolveTargets or equivalent
-  // to assign the load to the cluster
+  // user provided function needs to create/delete ResolveTargets or equivalent
+  // to assign the load to the cluster and call startResolve on them.
 
-  using SrvResolveTargetPtr = std::unique_ptr<SrvResolveTarget>;
 }
 } // namespace Upstream
 } // namespace Envoy

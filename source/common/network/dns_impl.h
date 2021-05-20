@@ -34,7 +34,7 @@ public:
   // Network::DnsResolver
   ActiveDnsQuery* resolve(const std::string& dns_name, DnsLookupFamily dns_lookup_family,
                           ResolveCb callback) override;
-  ActiveDnsQuery* resolveSrv(const std::string& dns_name, DnsLookupFamily dns_lookup_family,
+  ActiveDnsQueryPtr resolveSrv(const std::string& dns_name, DnsLookupFamily dns_lookup_family,
                              ResolveSrvCb callback) override;
 
 private:
@@ -92,10 +92,9 @@ private:
 
   struct PendingSrvResolution : public PendingResolutionBase {
     PendingSrvResolution(ResolveSrvCb callback, Event::Dispatcher& dispatcher, ares_channel channel,
-                         const std::string& dns_name, DnsLookupFamily dns_lookup_family,
-                         DnsResolverImpl* resolver)
+                         const std::string& dns_name, DnsResolverImpl* resolver)
         : PendingResolutionBase(dispatcher, channel, dns_name), callback_(callback),
-          dns_lookup_family_(dns_lookup_family), resolver_(resolver) {}
+          resolver_(resolver) {}
 
     /**
      * c-ares ares_query() query callback for initiation.
@@ -117,8 +116,6 @@ private:
 
     // Caller supplied callback to invoke on query completion or error.
     const ResolveSrvCb callback_;
-    // The DnsLookupFamily for the SRV record.
-    const DnsLookupFamily dns_lookup_family_;
     // The resolver instance.
     DnsResolverImpl* resolver_;
   };

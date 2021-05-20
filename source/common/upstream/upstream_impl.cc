@@ -1644,5 +1644,47 @@ void reportUpstreamCxDestroyActiveRequest(const Upstream::HostDescriptionConstSh
   }
 }
 
+SrvLoadAssignmentManager::SrvResolveTarget::SrvResolveTarget(
+  envoy::config::common::srv::v3::SrvName srv_name,
+  const Network::DnsResolver& resolver, Event::Dispatcher& dispatcher)
+  : srv_name_(srv_name), resolver_(resolver),
+    srv_resolve_timer_(dispatcher.createTimer([this]() -> void { startSrvResolve(); })) {}
+
+void SrvLoadAssignmentManager::SrvResolveTarget::startSrvResolve() {
+  ENVOY_LOG(trace, "starting async SRV DNS resolution for {}", srv_name_);
+
+  active_query_ = dns_resolver_->resolveSrv(
+    dns_address_, parent_.dns_lookup_family_,
+    [this](Network::DnsResolver::ResolutionStatus status,
+            std::list<Network::DnsResponse>&& response) -> void {
+      active_query_ = nullptr;
+      ENVOY_LOG(trace, "async DNS resolution complete for {}", dns_address_);
+
+      std::chrono::milliseconds final_refresh_rate = parent_.dns_refresh_rate_ms_;
+
+      if (status == Network::DnsResolver::ResolutionStatus::Success) {
+}
+
+SrvLoadAssignmentManager::SrvLoadAssignmentManager(
+  const Protobuf::RepeatedPtrField<envoy::config::common::srv::v3::SrvName>& srv_names,
+  const Network:DnsResolver& resolver, Event::Dispatcher& dispatcher,
+  std::function<void(
+    const absl::flat_hash_map<uint32_t,
+        std::pair<envoy::config::endpoint::v3::LocalityLbEndpoints,
+          std::vector<envoy::config::endpoint::v3::LbEndpoints>>>& add_locality_lb_endpoints,
+    const absl::flat_hash_map<uint32_t,
+        std::pair<envoy::config::endpoint::v3::LocalityLbEndpoints,
+          std::vector<envoy::config::endpoint::v3::LbEndpoints>>>& remove_locality_lb_endpoints
+  )> load_update_cb)
+  : load_update_cb_(load_update_cb) {
+  // iterate through the srv_names and create a SrvResolveTarget for each one
+  for (const auto& srv_name : srv_names {
+    srv_resolve_targets_.emplace_back(std::make_unique<SrvResolveTarget>(srv_name, resolver,
+                                                                         dispatcher));
+  }
+  // load_assignment_ should get default initialized. The "real" load_assignment_ won't be populated
+  // until startSrvResolve finishes at least one SRV resolution.
+}
+
 } // namespace Upstream
 } // namespace Envoy

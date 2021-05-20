@@ -319,11 +319,9 @@ void DnsResolverImpl::PendingResolution::getAddrInfo(int family) {
       this);
 }
 
-ActiveDnsQuery* DnsResolverImpl::resolveSrv(const std::string& dns_name,
-                                            DnsLookupFamily dns_lookup_family,
-                                            ResolveSrvCb callback) {
+ActiveDnsQueryPtr DnsResolverImpl::resolveSrv(const std::string& dns_name, ResolveSrvCb callback) {
   std::unique_ptr<PendingSrvResolution> pending_srv_res(
-      new PendingSrvResolution(callback, dispatcher_, channel_, dns_name, dns_lookup_family, this));
+      new PendingSrvResolution(callback, dispatcher_, channel_, dns_name, this));
   pending_srv_res->getSrvByName();
   return preparePendingResolution(std::move(pending_srv_res));
 }

@@ -48,8 +48,6 @@ protected:
   void updateAllHosts(const HostVector& hosts_added, const HostVector& hosts_removed,
                       uint32_t priority);
 
-  // ClusterImplBase
-  void startPreInit() override;
 
   const LocalInfo::LocalInfo& local_info_;
   Network::DnsResolverSharedPtr dns_resolver_;
@@ -70,6 +68,10 @@ public:
                        Network::DnsResolverSharedPtr dns_resolver,
                        Server::Configuration::TransportSocketFactoryContextImpl& factory_context,
                        Stats::ScopePtr&& stats_scope, bool added_via_api);
+
+protected:
+  // ClusterImplBase
+  void startPreInit() override;
 };
 
 /**

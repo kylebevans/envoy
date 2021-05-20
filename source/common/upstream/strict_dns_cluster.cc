@@ -25,17 +25,6 @@ BaseStrictDnsClusterImpl::BaseStrictDnsClusterImpl(
   dns_lookup_family_ = getDnsLookupFamilyFromCluster(cluster);
 }
 
-void BaseStrictDnsClusterImpl::startPreInit() {
-  for (const ResolveTargetPtr& target : resolve_targets_) {
-    target->startResolve();
-  }
-  // If the config provides no endpoints, the cluster is initialized immediately as if all hosts are
-  // resolved in failure.
-  if (resolve_targets_.empty()) {
-    onPreInitComplete();
-  }
-}
-
 void BaseStrictDnsClusterImpl::updateAllHosts(const HostVector& hosts_added,
                                           const HostVector& hosts_removed,
                                           uint32_t current_priority) {
@@ -120,7 +109,8 @@ void BaseStrictDnsClusterImpl::ResolveTarget::startResolve() {
           // whole priority. Also, hosts_, hosts_added, and hosts_removed are all updated per
           // ResolveTarget. If there are changes, then updateAllHosts will iterate through all of
           // the ResolveTargets for the cluster, find all of the hosts_ for this priority including
-          // this updated one, and update the cluster with the new set of hosts for this priority.
+          // this updated one, and register them for the priority. After that, it will
+          // update the cluster priority set with the hosts_added and hosts_removed.
           if (parent_.updateDynamicHostList(new_hosts, hosts_, hosts_added, hosts_removed,
                                             updated_hosts, all_hosts_, all_new_hosts)) {
             ENVOY_LOG(debug, "DNS hosts have changed for {}", dns_address_);
@@ -195,6 +185,17 @@ StrictDnsClusterImpl::StrictDnsClusterImpl(
   resolve_targets_ = std::move(resolve_targets);
   overprovisioning_factor_ = PROTOBUF_GET_WRAPPED_OR_DEFAULT(
       load_assignment.policy(), overprovisioning_factor, kDefaultOverProvisioningFactor);
+}
+
+void StrictDnsClusterImpl::startPreInit() {
+  for (const ResolveTargetPtr& target : resolve_targets_) {
+    target->startResolve();
+  }
+  // If the config provides no endpoints, the cluster is initialized immediately as if all hosts are
+  // resolved in failure.
+  if (resolve_targets_.empty()) {
+    onPreInitComplete();
+  }
 }
 
 std::pair<ClusterImplBaseSharedPtr, ThreadAwareLoadBalancerPtr>
