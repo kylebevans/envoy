@@ -138,6 +138,8 @@ void BaseStrictDnsClusterImpl::ResolveTarget::startResolve() {
         } else {
           parent_.info_->stats().update_failure_.inc();
 
+          // make it so ActiveDnsQuery never owns itself, we either reset the unique_ptr here or just leave it around until it gets assigned over on the next resolve, which will call the destructor
+
           final_refresh_rate =
               std::chrono::milliseconds(parent_.failure_backoff_strategy_->nextBackOffMs());
           ENVOY_LOG(debug, "DNS refresh rate reset for {}, (failure) refresh rate {} ms",
